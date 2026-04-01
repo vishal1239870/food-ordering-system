@@ -3,7 +3,8 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/food_ordering_db"
+    DATABASE_URL: str = "sqlite:///:memory:"
+    
     
     # JWT Settings
     SECRET_KEY: str = "your-secret-key-here-change-in-production"
@@ -13,6 +14,11 @@ class Settings(BaseSettings):
     # App Settings
     APP_NAME: str = "FoodHub API"
     DEBUG: bool = True
+    
+    # Default Admin
+    ADMIN_EMAIL: str = "admin@foodhub.com"
+    ADMIN_PASSWORD: str = "admin123"
+
     
     # CORS
     CORS_ORIGINS: list = [

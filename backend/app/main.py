@@ -99,9 +99,31 @@ async def websocket_endpoint(
 # Startup event
 @app.on_event("startup")
 async def startup_event():
+    import hashlib
     print(f"{settings.APP_NAME} started successfully")
-    print(f"Database: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}")
+    print(f"Database: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'SQLite (In-Memory)'}")
     print(f"API Docs: http://localhost:8000/docs")
+
+    # Seed default admin
+    db = next(get_db())
+    try:
+        admin_user = db.query(User).filter(User.email == settings.ADMIN_EMAIL).first()
+        if not admin_user:
+            print(f"Seeding default admin: {settings.ADMIN_EMAIL}")
+            hashed_password = hashlib.md5(settings.ADMIN_PASSWORD.encode()).hexdigest()
+            new_admin = User(
+                name="System Admin",
+                email=settings.ADMIN_EMAIL,
+                password=hashed_password,
+                role="admin"
+            )
+            db.add(new_admin)
+            db.commit()
+            print("Admin user seeded successfully")
+    except Exception as e:
+        print(f"Error seeding admin: {e}")
+    finally:
+        db.close()
 
 # Shutdown event
 @app.on_event("shutdown")
