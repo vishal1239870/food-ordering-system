@@ -19,4 +19,5 @@ services:
     publishDir: dist
     envVars:
       - key: VITE_API_URL
-        value: https://foodhub-backend.onrender.com/api # Replace with your actual backend URL after deployment
+        value: https://food-ordering-system-7ffq.onrender.com
+

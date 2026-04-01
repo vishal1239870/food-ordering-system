@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://food-ordering-system-7ffq.onrender.com';
+
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -89,7 +90,8 @@ export class OrderWebSocket {
   }
 
   connect() {
-    const wsURL = `ws://localhost:8000/ws/${this.token}`;
+    const wsURL = `wss://food-ordering-system-7ffq.onrender.com/ws/${this.token}`;
+
     this.ws = new WebSocket(wsURL);
 
     this.ws.onopen = () => {
