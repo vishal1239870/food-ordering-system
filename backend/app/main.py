@@ -1,20 +1,18 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 from .config import settings
-from .database import get_db, engine, Base
+from .database import get_db, db
 from .routers import auth, menu, cart, orders, kitchen, waiter, admin
 from .websockets.manager import manager
-from .dependencies.auth import decode_token
+from .dependencies.auth import decode_token, get_password_hash
 from .models.user import User
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
+from .models.menu import MenuItem
+from datetime import datetime
 
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Online Food Ordering System API",
+    description="Online Food Ordering System API (MongoDB Edition)",
     version="1.0.0",
     debug=settings.DEBUG
 )
@@ -41,7 +39,7 @@ app.include_router(admin.router)
 @app.get("/")
 async def root():
     return {
-        "message": "Welcome to FoodHub API",
+        "message": "Welcome to FoodHub API (MongoDB)",
         "version": "1.0.0",
         "docs": "/docs"
     }
@@ -49,14 +47,13 @@ async def root():
 # Health check
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "database": "mongodb"}
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws/{token}")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str,
-    db: Session = Depends(get_db)
+    token: str
 ):
     """WebSocket endpoint for real-time order updates"""
     try:
@@ -68,16 +65,23 @@ async def websocket_endpoint(
             await websocket.close(code=1008)
             return
         
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
+        # Get user from MongoDB
+        user_doc = await db.users.find_one({"_id": user_id})
+        if not user_doc:
+            # Try searching by string ID if needed
+            user_doc = await db.users.find_one({"id": user_id})
+
+        if not user_doc:
             await websocket.close(code=1008)
             return
         
+        user_role = user_doc.get("role", "customer")
+        
         # Connect based on role
-        if user.role == "customer":
-            await manager.connect(websocket, user_id=user.id)
+        if user_role == "customer":
+            await manager.connect(websocket, user_id=user_id)
         else:
-            await manager.connect(websocket, user_id=user.id, role=user.role)
+            await manager.connect(websocket, user_id=user_id, role=user_role)
         
         try:
             # Keep connection alive and handle messages
@@ -87,10 +91,10 @@ async def websocket_endpoint(
                 await websocket.send_json({"type": "pong", "message": "Connection alive"})
         
         except WebSocketDisconnect:
-            if user.role == "customer":
-                manager.disconnect(websocket, user_id=user.id)
+            if user_role == "customer":
+                manager.disconnect(websocket, user_id=user_id)
             else:
-                manager.disconnect(websocket, user_id=user.id, role=user.role)
+                manager.disconnect(websocket, user_id=user_id, role=user_role)
     
     except Exception as e:
         print(f"WebSocket error: {e}")
@@ -99,31 +103,107 @@ async def websocket_endpoint(
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    import hashlib
-    print(f"{settings.APP_NAME} started successfully")
-    print(f"Database: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'SQLite (In-Memory)'}")
+    print(f"{settings.APP_NAME} started successfully (MongoDB)")
     print(f"API Docs: http://localhost:8000/docs")
 
-    # Seed default admin
-    db = next(get_db())
+    # Seed default users
     try:
-        admin_user = db.query(User).filter(User.email == settings.ADMIN_EMAIL).first()
-        if not admin_user:
-            print(f"Seeding default admin: {settings.ADMIN_EMAIL}")
-            hashed_password = hashlib.md5(settings.ADMIN_PASSWORD.encode()).hexdigest()
-            new_admin = User(
-                name="System Admin",
-                email=settings.ADMIN_EMAIL,
-                password=hashed_password,
-                role="admin"
-            )
-            db.add(new_admin)
-            db.commit()
-            print("Admin user seeded successfully")
+        users_to_seed = [
+            {"name": "System Admin", "email": "admin@foodhub.com", "password": "admin123", "role": "admin"},
+            {"name": "John Customer", "email": "john@example.com", "password": "admin123", "role": "customer"},
+            {"name": "Jane Waiter", "email": "jane@foodhub.com", "password": "admin123", "role": "waiter"},
+            {"name": "Mike Chef", "email": "mike@foodhub.com", "password": "admin123", "role": "kitchen"},
+        ]
+
+        for user_data in users_to_seed:
+            try:
+                existing_user = await db.users.find_one({"email": user_data["email"]})
+                if not existing_user:
+                    print(f"Seeding user: {user_data['email']} ({user_data['role']})")
+                    hashed_password = get_password_hash(user_data["password"])
+                    new_user = {
+                        "name": user_data["name"],
+                        "email": user_data["email"],
+                        "password": hashed_password,
+                        "role": user_data["role"],
+                        "created_at": datetime.utcnow()
+                    }
+                    result = await db.users.insert_one(new_user)
+                    
+                    # Create cart for customer
+                    if user_data["role"] == "customer":
+                        await db.carts.insert_one({
+                            "user_id": str(result.inserted_id),
+                            "items": [],
+                            "updated_at": datetime.utcnow()
+                        })
+                else:
+                    # Update password to new scheme if it's currently md5 or broken
+                    stored_pwd = existing_user.get("password", "")
+                    if stored_pwd.startswith("$2") or not stored_pwd.startswith("$pbkdf2"):
+                         print(f"Migrating password hash for: {user_data['email']}")
+                         new_hashed = get_password_hash(user_data["password"])
+                         await db.users.update_one(
+                             {"_id": existing_user["_id"]},
+                             {"$set": {"password": new_hashed}}
+                         )
+            except Exception as user_e:
+                print(f"Error seeding user {user_data['email']}: {user_e}")
+
+        # Seed default menu items
+        try:
+            existing_items = await db.menu_items.find_one({})
+            if not existing_items:
+                print("Seeding default menu items...")
+                default_items = [
+                    {
+                        "name": "Classic Cheeseburger",
+                        "description": "Juicy beef patty with cheddar cheese, lettuce, tomato, and our special sauce.",
+                        "price": 9.99,
+                        "category": "Burgers",
+                        "image_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Margherita Pizza",
+                        "description": "Traditional wood-fired pizza with fresh mozzarella, tomatoes, and basil.",
+                        "price": 14.50,
+                        "category": "Pizza",
+                        "image_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Caesar Salad",
+                        "description": "Crisp romaine lettuce, croutons, parmesan cheese, and Caesar dressing.",
+                        "price": 8.99,
+                        "category": "Salads",
+                        "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Creamy Pesto Pasta",
+                        "description": "Penne pasta tossed in a rich, creamy basil pesto sauce with pine nuts.",
+                        "price": 15.50,
+                        "category": "Pasta",
+                        "image_url": "https://images.unsplash.com/photo-1473093226795-af9932fe5856?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Chocolate Lava Cake",
+                        "description": "Warm chocolate cake with a gooey center, served with vanilla bean ice cream.",
+                        "price": 7.50,
+                        "category": "Desserts",
+                        "image_url": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?q=80&w=500&auto=format&fit=crop"
+                    }
+                ]
+                for item in default_items:
+                    item["created_at"] = datetime.utcnow()
+                    item["updated_at"] = datetime.utcnow()
+                    item["available"] = True
+                
+                await db.menu_items.insert_many(default_items)
+                print("Menu items seeded successfully")
+        except Exception as menu_e:
+            print(f"Error seeding products: {menu_e}")
+            
     except Exception as e:
-        print(f"Error seeding admin: {e}")
-    finally:
-        db.close()
+        print(f"Error during startup database operations: {e}")
 
 # Shutdown event
 @app.on_event("shutdown")

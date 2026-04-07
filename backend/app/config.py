@@ -2,8 +2,8 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "sqlite:///:memory:"
+    MONGODB_URL: str = "mongodb+srv://ff465593_db_user:user123@cluster0.znxgasq.mongodb.net/?appName=Cluster0"
+    MONGODB_DB_NAME: str = "foodhub"
     
     
     # JWT Settings

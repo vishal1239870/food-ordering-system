@@ -15,12 +15,10 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=1)
 
 class User(UserBase):
-    id: int
+    id: str
     role: str
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
+
 
 class Token(BaseModel):
     access_token: str

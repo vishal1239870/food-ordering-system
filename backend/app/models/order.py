@@ -1,49 +1,35 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DECIMAL, DateTime, Enum as SQLEnum, Text
-from sqlalchemy.orm import relationship
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-import enum
-from ..database import Base
+from typing import List, Optional
+from enum import Enum
+from .base import PyObjectId
 
-class OrderStatus(str, enum.Enum):
+class OrderStatus(str, Enum):
     PLACED = "Placed"
     PREPARING = "Preparing"
     COOKING = "Cooking"
     READY_TO_SERVE = "Ready to Serve"
     SERVED = "Served"
+    CANCELLED = "Cancelled"
 
-class PaymentStatus(str, enum.Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
+class OrderItem(BaseModel):
+    menu_item_id: str
+    name: str
+    price: float
+    quantity: int = Field(default=1, ge=1)
+    image_url: Optional[str] = None
 
-class Order(Base):
-    __tablename__ = "orders"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    total_price = Column(DECIMAL(10, 2), nullable=False)
-    # FIX: Use native_enum=False
-    status = Column(SQLEnum(OrderStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), default=OrderStatus.PLACED, index=True)
-    payment_status = Column(SQLEnum(PaymentStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), default=PaymentStatus.PENDING)
-    notes = Column(Text)
-    table_number = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    user = relationship("User", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+class Order(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    user_id: str
+    status: OrderStatus = OrderStatus.PLACED
+    total_price: float = Field(..., ge=0)
+    items: List[OrderItem]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-class OrderItem(Base):
-    __tablename__ = "order_items"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    item_id = Column(Integer, ForeignKey("menu_items.id"), nullable=False)
-    quantity = Column(Integer, nullable=False)
-    price = Column(DECIMAL(10, 2), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    order = relationship("Order", back_populates="items")
-    menu_item = relationship("MenuItem", back_populates="order_items")
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )

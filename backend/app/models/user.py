@@ -1,25 +1,18 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from datetime import datetime
-import enum
-from ..database import Base
+from typing import Optional
+from .base import PyObjectId
 
-class UserRole(str, enum.Enum):
-    CUSTOMER = "customer"
-    WAITER = "waiter"
-    KITCHEN = "kitchen"
-    ADMIN = "admin"
+class User(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    name: str
+    email: EmailStr
+    password: str
+    role: str = "customer"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password = Column(String(255), nullable=False)
-    role = Column(SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]), default=UserRole.CUSTOMER)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    cart = relationship("Cart", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )

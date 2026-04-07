@@ -3,7 +3,7 @@ from typing import List
 from decimal import Decimal
 
 class CartItemBase(BaseModel):
-    item_id: int
+    item_id: str
     quantity: int
 
 class CartItemCreate(CartItemBase):
@@ -13,21 +13,14 @@ class CartItemUpdate(BaseModel):
     quantity: int
 
 class CartItemResponse(BaseModel):
-    id: int
-    item_id: int
+    item_id: str
     quantity: int
-    price: Decimal
+    price: float
     item_name: str
     item_description: str
-    
-    class Config:
-        from_attributes = True
 
 class CartResponse(BaseModel):
-    id: int
-    user_id: int
+    id: str
+    user_id: str
     items: List[CartItemResponse]
-    total: Decimal
-    
-    class Config:
-        from_attributes = True
+    total: float

@@ -1,175 +1,152 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from bson import ObjectId
 from typing import List
-from decimal import Decimal
+from datetime import datetime
 from ..database import get_db
 from ..models.user import User
-from ..models.order import Order, OrderItem, OrderStatus, PaymentStatus
-from ..models.cart import Cart, CartItem
-from ..models.menu import MenuItem
-from ..schemas.order import OrderCreate, OrderResponse, OrderItemResponse, PaymentRequest
+from ..schemas.order import OrderCreate, OrderResponse, PaymentRequest
 from ..dependencies.auth import get_current_user
 from ..websockets.manager import manager
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
-def format_order_response(order: Order, db: Session) -> dict:
-    """Helper to format order with items"""
+def format_order_response(order_doc: dict) -> dict:
     items = []
-    for order_item in order.items:
-        menu_item = db.query(MenuItem).filter(MenuItem.id == order_item.item_id).first()
+    for item in order_doc.get("items", []):
         items.append({
-            "id": order_item.id,
-            "item_id": order_item.item_id,
-            "quantity": order_item.quantity,
-            "price": order_item.price,
-            "item_name": menu_item.name if menu_item else "Unknown"
+            "item_id": str(item.get("item_id")),
+            "quantity": item.get("quantity", 1),
+            "price": float(item.get("price", 0.0)),
+            "item_name": item.get("name", "Unknown"),
+            "image_url": item.get("image_url", None)
         })
     
     return {
-        "id": order.id,
-        "user_id": order.user_id,
-        "total_price": order.total_price,
-        "status": order.status.value,
-        "payment_status": order.payment_status.value,
-        "notes": order.notes,
-        "table_number": order.table_number,
+        "id": str(order_doc["_id"]),
+        "user_id": str(order_doc.get("user_id")),
+        "total_price": float(order_doc.get("total_price", 0.0)),
+        "status": order_doc.get("status", "Placed"),
+        "payment_status": order_doc.get("payment_status", "Pending"),
+        "notes": order_doc.get("notes"),
+        "table_number": order_doc.get("table_number"),
         "items": items,
-        "created_at": order.created_at,
-        "updated_at": order.updated_at
+        "created_at": order_doc.get("created_at"),
+        "updated_at": order_doc.get("updated_at")
     }
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(
     order_data: OrderCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
-    """Create order from cart"""
-    # Get user's cart
-    cart = db.query(Cart).filter(Cart.user_id == current_user.id).first()
-    if not cart or not cart.items:
+    user_id_str = str(current_user.id)
+    cart = await db.carts.find_one({"user_id": user_id_str})
+    if not cart or not cart.get("items"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cart is empty"
         )
     
-    # Calculate total
-    total = Decimal("0.00")
-    for item in cart.items:
-        total += item.price * item.quantity
+    items = cart.get("items", [])
+    total = sum([item.get("price", 0.0) * item.get("quantity", 1) for item in items])
     
-    # Create order
-    new_order = Order(
-        user_id=current_user.id,
-        total_price=total,
-        status=OrderStatus.PLACED,
-        payment_status=PaymentStatus.PENDING,
-        notes=order_data.notes,
-        table_number=order_data.table_number
-    )
+    order_items = []
+    for item in items:
+        order_items.append({
+            "item_id": item.get("menu_item_id"),
+            "name": item.get("name", "Unknown"),
+            "price": item.get("price", 0.0),
+            "quantity": item.get("quantity", 1),
+            "image_url": item.get("image_url", None)
+        })
+        
+    order_doc = {
+        "user_id": user_id_str,
+        "total_price": total,
+        "status": "Placed",
+        "payment_status": "Pending",
+        "notes": order_data.notes,
+        "table_number": order_data.table_number,
+        "items": order_items,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
     
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
-    
-    # Create order items from cart
-    for cart_item in cart.items:
-        order_item = OrderItem(
-            order_id=new_order.id,
-            item_id=cart_item.item_id,
-            quantity=cart_item.quantity,
-            price=cart_item.price
-        )
-        db.add(order_item)
+    result = await db.orders.insert_one(order_doc)
+    order_doc["_id"] = result.inserted_id
     
     # Clear cart
-    db.query(CartItem).filter(CartItem.cart_id == cart.id).delete()
-    db.commit()
+    await db.carts.update_one({"_id": cart["_id"]}, {"$set": {"items": [], "updated_at": datetime.utcnow()}})
     
-    # Format response
-    order_response = format_order_response(new_order, db)
-    
-    # Notify via WebSocket
+    response = format_order_response(order_doc)
     await manager.notify_order_update(
-        new_order.id,
-        current_user.id,
-        OrderStatus.PLACED.value,
-        order_response
+        str(result.inserted_id),
+        user_id_str,
+        "Placed",
+        response
     )
     
-    return order_response
+    return response
 
 @router.get("/", response_model=List[OrderResponse])
 async def get_my_orders(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
-    """Get all orders for current user"""
-    orders = db.query(Order).filter(
-        Order.user_id == current_user.id
-    ).order_by(Order.created_at.desc()).all()
-    
-    return [format_order_response(order, db) for order in orders]
+    user_id_str = str(current_user.id)
+    cursor = db.orders.find({"user_id": user_id_str}).sort("created_at", -1)
+    orders = []
+    async for order_doc in cursor:
+        orders.append(format_order_response(order_doc))
+    return orders
 
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
-    order_id: int,
+    order_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
-    """Get specific order"""
-    order = db.query(Order).filter(Order.id == order_id).first()
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid order ID")
+        
+    obj_id = ObjectId(order_id)
+    order_doc = await db.orders.find_one({"_id": obj_id})
+    if not order_doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Order not found"
-        )
-    
-    # Check if user owns the order (or is staff)
-    if order.user_id != current_user.id and current_user.role not in ["waiter", "kitchen", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
-    
-    return format_order_response(order, db)
+    user_id_str = str(current_user.id)
+    if str(order_doc.get("user_id")) != user_id_str and current_user.role not in ["waiter", "kitchen", "admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        
+    return format_order_response(order_doc)
 
 @router.post("/{order_id}/payment")
 async def process_payment(
-    order_id: int,
-    payment: PaymentRequest,  # now only expects payment_method
+    order_id: str,
+    payment: PaymentRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
-    """Process payment for order"""
-    order = db.query(Order).filter(Order.id == order_id).first()
-    
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Order not found"
-        )
-    
-    if order.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
-    
-    if order.payment_status == PaymentStatus.COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Order already paid"
-        )
-    
-    # Process payment (dummy)
-    order.payment_status = PaymentStatus.COMPLETED
-    db.commit()
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid order ID")
+        
+    obj_id = ObjectId(order_id)
+    order_doc = await db.orders.find_one({"_id": obj_id})
+    if not order_doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        
+    user_id_str = str(current_user.id)
+    if str(order_doc.get("user_id")) != user_id_str:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        
+    if order_doc.get("payment_status") == "Completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order already paid")
+        
+    await db.orders.update_one({"_id": obj_id}, {"$set": {"payment_status": "Completed", "updated_at": datetime.utcnow()}})
     
     return {
         "message": "Payment processed successfully",
         "order_id": order_id,
-        "payment_status": "completed"
+        "payment_status": "Completed"
     }

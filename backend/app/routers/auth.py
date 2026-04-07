@@ -1,21 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User
 from ..models.cart import Cart
 from ..schemas.user import UserCreate, UserLogin, Token, User as UserSchema
-from ..dependencies.auth import create_access_token, get_current_user
-import hashlib
+from ..dependencies.auth import create_access_token, get_password_hash, verify_password
+from datetime import datetime
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-def md5_hash(password: str) -> str:
-    return hashlib.md5(password.encode()).hexdigest()
-
-
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
+async def register(user_data: UserCreate, db = Depends(get_db)):
+    # Check if user already exists in MongoDB
+    existing_user = await db.users.find_one({"email": user_data.email.lower()})
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -29,46 +25,71 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
         )
 
-    new_user = User(
-        name=user_data.name,
-        email=user_data.email.lower(),
-        password=md5_hash(user_data.password),  # 🔐 MD5 hash
-        role=user_data.role or "customer"
-    )
+    # Prepare new user document
+    new_user_doc = {
+        "name": user_data.name,
+        "email": user_data.email.lower(),
+        "password": get_password_hash(user_data.password),
+        "role": user_data.role or "customer",
+        "created_at": datetime.utcnow()
+    }
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    # Insert into MongoDB
+    result = await db.users.insert_one(new_user_doc)
+    user_id = str(result.inserted_id)
+    
+    # Create cart for customers
+    if new_user_doc["role"] == "customer":
+        await db.carts.insert_one({
+            "user_id": user_id,
+            "items": [],
+            "updated_at": datetime.utcnow()
+        })
 
-    if new_user.role == "customer":
-        new_cart = Cart(user_id=new_user.id)
-        db.add(new_cart)
-        db.commit()
+    # Generate token
+    access_token = create_access_token(data={"sub": user_id})
 
-    access_token = create_access_token(data={"sub": str(new_user.id)})
+    # Prepare user schema for response
+    user_schema_data = {
+        "id": user_id,
+        "name": new_user_doc["name"],
+        "email": new_user_doc["email"],
+        "role": new_user_doc["role"],
+        "created_at": new_user_doc["created_at"]
+    }
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserSchema.from_orm(new_user)
+        "user": user_schema_data
     }
 
-
 @router.post("/login", response_model=Token)
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email.lower()).first()
+async def login(credentials: UserLogin, db = Depends(get_db)):
+    # Find user in MongoDB
+    user_doc = await db.users.find_one({"email": credentials.email.lower()})
 
-    if not user or user.password != md5_hash(credentials.password):  # 🔐 MD5 check
+    if not user_doc or not verify_password(credentials.password, user_doc["password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(user.id)})
+    user_id = str(user_doc["_id"])
+    access_token = create_access_token(data={"sub": user_id})
+
+    # Prepare user schema for response
+    user_schema_data = {
+        "id": user_id,
+        "name": user_doc.get("name"),
+        "email": user_doc.get("email"),
+        "role": user_doc.get("role"),
+        "created_at": user_doc.get("created_at")
+    }
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserSchema.from_orm(user)
+        "user": user_schema_data
     }

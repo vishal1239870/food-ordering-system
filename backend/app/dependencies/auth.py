@@ -4,12 +4,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from bson import ObjectId
 from ..config import settings
 from ..database import get_db
 from ..models.user import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -46,27 +46,41 @@ def decode_token(token: str) -> dict:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ) -> User:
-    """Get current authenticated user"""
+    """Get current authenticated user from MongoDB"""
     token = credentials.credentials
     payload = decode_token(token)
     
-    user_id: int = payload.get("sub")
-    if user_id is None:
+    user_id_str: str = payload.get("sub")
+    if user_id_str is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
         )
     
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
+    # Try finding by ObjectId first, then by string ID
+    query = {"_id": user_id_str}
+    if ObjectId.is_valid(user_id_str):
+        query = {"_id": ObjectId(user_id_str)}
+    
+    user_doc = await db.users.find_one(query)
+    
+    if not user_doc:
+        # Fallback to 'id' field if it exists as a string
+        user_doc = await db.users.find_one({"id": user_id_str})
+
+    if user_doc is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
     
-    return user
+    # Map _id to id if necessary for the Pydantic model
+    if "_id" in user_doc:
+        user_doc["id"] = user_doc["_id"]
+        
+    return User(**user_doc)
 
 def require_role(allowed_roles: list):
     """Dependency to check if user has required role"""

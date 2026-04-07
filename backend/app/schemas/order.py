@@ -1,22 +1,18 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from decimal import Decimal
 
 class OrderItemBase(BaseModel):
-    item_id: int
+    item_id: str
     quantity: int
-    price: Decimal
+    price: float
 
 class OrderItemResponse(BaseModel):
-    id: int
-    item_id: int
+    item_id: str
     quantity: int
-    price: Decimal
+    price: float
     item_name: str
-    
-    class Config:
-        from_attributes = True
+    image_url: Optional[str] = None
 
 class OrderCreate(BaseModel):
     notes: Optional[str] = None
@@ -27,19 +23,16 @@ class OrderStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 class OrderResponse(BaseModel):
-    id: int
-    user_id: int
-    total_price: Decimal
+    id: str
+    user_id: str
+    total_price: float
     status: str
     payment_status: str
-    notes: Optional[str]
-    table_number: Optional[int]
+    notes: Optional[str] = None
+    table_number: Optional[int] = None
     items: List[OrderItemResponse]
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class PaymentRequest(BaseModel):
     payment_method: str = "card"

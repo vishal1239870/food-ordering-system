@@ -1,103 +1,94 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from bson import ObjectId
 from typing import List
 from ..database import get_db
 from ..models.user import User
-from ..models.order import Order, OrderStatus
-from ..models.menu import MenuItem
 from ..schemas.order import OrderResponse, OrderStatusUpdate
-from ..dependencies.auth import get_current_user, require_role
+from ..dependencies.auth import require_role
 from ..websockets.manager import manager
+from datetime import datetime
 
 router = APIRouter(prefix="/api/kitchen", tags=["Kitchen"])
 
-def format_order_response(order: Order, db: Session) -> dict:
-    """Helper to format order with items"""
+def format_order_response(order_doc: dict) -> dict:
     items = []
-    for order_item in order.items:
-        menu_item = db.query(MenuItem).filter(MenuItem.id == order_item.item_id).first()
+    for item in order_doc.get("items", []):
         items.append({
-            "id": order_item.id,
-            "item_id": order_item.item_id,
-            "quantity": order_item.quantity,
-            "price": order_item.price,
-            "item_name": menu_item.name if menu_item else "Unknown"
+            "item_id": str(item.get("item_id")),
+            "quantity": item.get("quantity", 1),
+            "price": float(item.get("price", 0.0)),
+            "item_name": item.get("name", "Unknown"),
+            "image_url": item.get("image_url", None)
         })
     
     return {
-        "id": order.id,
-        "user_id": order.user_id,
-        "total_price": order.total_price,
-        "status": order.status.value,
-        "payment_status": order.payment_status.value,
-        "notes": order.notes,
-        "table_number": order.table_number,
+        "id": str(order_doc["_id"]),
+        "user_id": str(order_doc.get("user_id")),
+        "total_price": float(order_doc.get("total_price", 0.0)),
+        "status": order_doc.get("status", "Placed"),
+        "payment_status": order_doc.get("payment_status", "Pending"),
+        "notes": order_doc.get("notes"),
+        "table_number": order_doc.get("table_number"),
         "items": items,
-        "created_at": order.created_at,
-        "updated_at": order.updated_at
+        "created_at": order_doc.get("created_at"),
+        "updated_at": order_doc.get("updated_at")
     }
 
 @router.get("/orders", response_model=List[OrderResponse])
 async def get_pending_orders(
     current_user: User = Depends(require_role(["kitchen", "admin"])),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """Get all orders that need kitchen attention"""
-    orders = db.query(Order).filter(
-        Order.status.in_([
-            OrderStatus.PLACED,
-            OrderStatus.PREPARING,
-            OrderStatus.COOKING
-        ])
-    ).order_by(Order.created_at).all()
+    cursor = db.orders.find({
+        "status": {"$in": ["Placed", "Preparing", "Cooking"]}
+    }).sort("created_at", 1)
     
-    return [format_order_response(order, db) for order in orders]
+    orders = []
+    async for order_doc in cursor:
+        orders.append(format_order_response(order_doc))
+        
+    return orders
 
 @router.put("/orders/{order_id}/status")
 async def update_order_status(
-    order_id: int,
+    order_id: str,
     status_update: OrderStatusUpdate,
     current_user: User = Depends(require_role(["kitchen", "admin"])),
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """Update order status in kitchen workflow"""
-    order = db.query(Order).filter(Order.id == order_id).first()
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid order ID")
+        
+    obj_id = ObjectId(order_id)
+    order_doc = await db.orders.find_one({"_id": obj_id})
+    if not order_doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Order not found"
-        )
-    
-    # Validate status transition
-    valid_statuses = [
-        OrderStatus.PLACED.value,
-        OrderStatus.PREPARING.value,
-        OrderStatus.COOKING.value,
-        OrderStatus.READY_TO_SERVE.value
-    ]
-    
+    valid_statuses = ["Placed", "Preparing", "Cooking", "Ready to Serve"]
     if status_update.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
     
-    # Update order
-    order.status = OrderStatus(status_update.status)
-    if status_update.notes:
-        order.notes = status_update.notes
+    update_data = {
+        "status": status_update.status,
+        "updated_at": datetime.utcnow()
+    }
+    if status_update.notes is not None:
+        update_data["notes"] = status_update.notes
+        
+    await db.orders.update_one({"_id": obj_id}, {"$set": update_data})
     
-    db.commit()
-    db.refresh(order)
+    # Reload to get updated doc
+    updated_order_doc = await db.orders.find_one({"_id": obj_id})
+    order_response = format_order_response(updated_order_doc)
     
-    # Format response
-    order_response = format_order_response(order, db)
-    
-    # Notify via WebSocket
     await manager.notify_order_update(
-        order.id,
-        order.user_id,
+        str(updated_order_doc["_id"]),
+        str(updated_order_doc.get("user_id")),
         status_update.status,
         order_response
     )

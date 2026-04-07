@@ -1,21 +1,21 @@
-from sqlalchemy import Column, Integer, String, Text, DECIMAL, Boolean, DateTime
-from sqlalchemy.orm import relationship
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from ..database import Base
+from typing import Optional
+from .base import PyObjectId
 
-class MenuItem(Base):
-    __tablename__ = "menu_items"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    price = Column(DECIMAL(10, 2), nullable=False)
-    category = Column(String(100), nullable=False, index=True)
-    image_url = Column(String(500))
-    available = Column(Boolean, default=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    cart_items = relationship("CartItem", back_populates="menu_item")
-    order_items = relationship("OrderItem", back_populates="menu_item")
+class MenuItem(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = None
+    price: float = Field(..., gt=0)
+    category: str = Field(..., max_length=100)
+    image_url: Optional[str] = Field(default=None, max_length=500)
+    available: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )

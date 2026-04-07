@@ -23,9 +23,6 @@ class MenuItemUpdate(BaseModel):
     available: Optional[bool] = None
 
 class MenuItem(MenuItemBase):
-    id: int
+    id: str
     created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
+    updated_at: datetime
