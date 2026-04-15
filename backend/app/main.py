@@ -1,5 +1,8 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import os
 from .config import settings
 from .database import get_db, db
 from .routers import auth, menu, cart, orders, kitchen, waiter, admin
@@ -214,6 +217,27 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     print("Shutting down application...")
+
+# Serving static files
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+
+if os.path.exists(static_dir):
+    # Mount assets folder if it exists
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    # Catch-all route to serve index.html for React SPA
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        # Let API and WebSocket paths be handled by routers
+        if full_path.startswith("api") or full_path.startswith("ws"):
+            return None
+        
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"message": "Welcome to FoodHub API (MongoDB)"}
 
 if __name__ == "__main__":
     import uvicorn
