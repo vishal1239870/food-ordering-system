@@ -38,14 +38,6 @@ app.include_router(kitchen.router)
 app.include_router(waiter.router)
 app.include_router(admin.router)
 
-# Root endpoint
-@app.get("/")
-async def root():
-    return {
-        "message": "Welcome to FoodHub API (MongoDB)",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
 
 # Health check
 @app.get("/health")
