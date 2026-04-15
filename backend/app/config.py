@@ -29,6 +29,10 @@ class Settings(BaseSettings):
         "https://food-ordering-system-1-b7m1.onrender.com"
     ]
     
+    # Google OAuth Settings
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

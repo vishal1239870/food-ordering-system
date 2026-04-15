@@ -65,8 +65,13 @@ async def websocket_endpoint(
             await websocket.close(code=1008)
             return
         
+        from bson import ObjectId
         # Get user from MongoDB
-        user_doc = await db.users.find_one({"_id": user_id})
+        try:
+            user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
+        except Exception:
+            user_doc = None
+            
         if not user_doc:
             # Try searching by string ID if needed
             user_doc = await db.users.find_one({"id": user_id})

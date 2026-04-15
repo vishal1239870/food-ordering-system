@@ -9,6 +9,8 @@ class User(BaseModel):
     email: EmailStr
     password: str
     role: str = "customer"
+    google_id: Optional[str] = None
+    profile_pic: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(

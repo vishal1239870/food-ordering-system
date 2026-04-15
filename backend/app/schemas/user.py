@@ -17,6 +17,7 @@ class UserLogin(BaseModel):
 class User(UserBase):
     id: str
     role: str
+    profile_pic: Optional[str] = None
     created_at: datetime
 
 
@@ -24,3 +25,6 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: User
+
+class GoogleLogin(BaseModel):
+    token: str

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
 import { Utensils, AlertCircle } from 'lucide-react';
 
 const Login = () => {
@@ -8,7 +9,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -24,6 +25,23 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setError('');
+    setLoading(true);
+    try {
+      const user = await googleLogin(credentialResponse.credential);
+      navigate(`/${user.role}`);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Google login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError('Google sign-in was unsuccessful. Please try again.');
   };
 
   const quickLogin = (role) => {
@@ -94,6 +112,26 @@ const Login = () => {
           </button>
         </form>
 
+        {/* Divider */}
+        <div className="flex items-center my-4">
+          <div className="flex-1 border-t border-gray-300"></div>
+          <span className="mx-3 text-sm text-gray-500">or continue with</span>
+          <div className="flex-1 border-t border-gray-300"></div>
+        </div>
+
+        {/* Google Login Button */}
+        <div className="flex justify-center">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            width="368"
+            theme="outline"
+            size="large"
+            text="signin_with"
+            shape="rectangular"
+          />
+        </div>
+
         <div className="mt-4 text-center">
           <p className="text-gray-600 text-sm">
             Don't have an account?{' '}
@@ -135,7 +173,6 @@ const Login = () => {
               Admin
             </button>
           </div>
-          
         </div>
       </div>
     </div>
