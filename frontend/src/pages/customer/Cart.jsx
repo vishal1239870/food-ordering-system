@@ -104,7 +104,7 @@ const Cart = () => {
         </div>
       )}
 
-      {!cart || cart.items.length === 0 ? (
+      {!cart || (cart.items || []).length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center shadow-md">
           <ShoppingCart className="mx-auto text-gray-400 mb-4" size={64} />
           <h3 className="text-2xl font-bold text-gray-800 mb-2">Your cart is empty</h3>
@@ -122,7 +122,7 @@ const Cart = () => {
           <div className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-gray-800">
-                Cart Items ({cart.items.length})
+                Cart Items ({(cart?.items || []).length})
               </h2>
               <button
                 onClick={clearCart}
@@ -133,7 +133,7 @@ const Cart = () => {
               </button>
             </div>
 
-            {cart.items.map((item) => (
+            {(cart?.items || []).map((item) => (
               <div
                 key={item.id}
                 className="bg-white rounded-xl shadow-md p-6 flex items-center justify-between"

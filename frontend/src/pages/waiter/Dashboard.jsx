@@ -88,7 +88,7 @@ const WaiterDashboard = () => {
       <div className="mb-4">
         <h4 className="font-semibold text-gray-700 mb-2">Items:</h4>
         <ul className="space-y-1">
-          {order.items.map((item) => (
+          {(order.items || []).map((item) => (
             <li key={item.id} className="text-gray-700 bg-gray-50 p-2 rounded">
               • {item.item_name} x{item.quantity}
             </li>
@@ -147,7 +147,7 @@ const WaiterDashboard = () => {
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
-          Ready to Serve ({readyOrders.length})
+          Ready to Serve ({(readyOrders || []).length})
         </button>
         <button
           onClick={() => setActiveTab('all')}
@@ -157,7 +157,7 @@ const WaiterDashboard = () => {
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
-          All Active ({allOrders.length})
+          All Active ({(allOrders || []).length})
         </button>
       </div>
 
@@ -167,7 +167,7 @@ const WaiterDashboard = () => {
           <h2 className="text-3xl font-bold text-gray-800 mb-6">
             Ready to Serve
           </h2>
-          {readyOrders.length === 0 ? (
+          {(readyOrders || []).length === 0 ? (
             <div className="bg-white rounded-xl p-12 text-center shadow-md">
               <CheckCircle className="mx-auto text-green-500 mb-4" size={64} />
               <h3 className="text-2xl font-bold text-gray-800 mb-2">
@@ -177,7 +177,7 @@ const WaiterDashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {readyOrders.map((order) => (
+              {(readyOrders || []).map((order) => (
                 <OrderCard key={order.id} order={order} showServeButton={true} />
               ))}
             </div>
@@ -191,7 +191,7 @@ const WaiterDashboard = () => {
           <h2 className="text-3xl font-bold text-gray-800 mb-6">
             All Active Orders
           </h2>
-          {allOrders.length === 0 ? (
+          {(allOrders || []).length === 0 ? (
             <div className="bg-white rounded-xl p-12 text-center shadow-md">
               <Clock className="mx-auto text-gray-400 mb-4" size={64} />
               <h3 className="text-2xl font-bold text-gray-800 mb-2">
@@ -201,7 +201,7 @@ const WaiterDashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allOrders.map((order) => (
+              {(allOrders || []).map((order) => (
                 <OrderCard 
                   key={order.id} 
                   order={order} 

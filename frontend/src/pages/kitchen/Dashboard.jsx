@@ -77,18 +77,18 @@ const KitchenDashboard = () => {
   }
 
   // Group orders by status
-  const placedOrders = orders.filter(o => o.status === 'Placed');
-  const preparingOrders = orders.filter(o => o.status === 'Preparing');
-  const cookingOrders = orders.filter(o => o.status === 'Cooking');
+  const placedOrders = (orders || []).filter(o => o.status === 'Placed');
+  const preparingOrders = (orders || []).filter(o => o.status === 'Preparing');
+  const cookingOrders = (orders || []).filter(o => o.status === 'Cooking');
 
   return (
     <Layout title="Kitchen Dashboard">
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Active Orders</h2>
-        <p className="text-gray-600">Total: {orders.length} orders</p>
+        <p className="text-gray-600">Total: {(orders || []).length} orders</p>
       </div>
 
-      {orders.length === 0 ? (
+      {(orders || []).length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center shadow-md">
           <ChefHat className="mx-auto text-gray-400 mb-4" size={64} />
           <h3 className="text-2xl font-bold text-gray-800 mb-2">
@@ -103,7 +103,7 @@ const KitchenDashboard = () => {
             <div className="bg-blue-100 rounded-t-lg p-3 mb-4">
               <h3 className="font-bold text-blue-800 flex items-center">
                 <Clock size={20} className="mr-2" />
-                New Orders ({placedOrders.length})
+                New Orders ({(placedOrders || []).length})
               </h3>
             </div>
             <div className="space-y-4">
@@ -124,7 +124,7 @@ const KitchenDashboard = () => {
             <div className="bg-yellow-100 rounded-t-lg p-3 mb-4">
               <h3 className="font-bold text-yellow-800 flex items-center">
                 <AlertCircle size={20} className="mr-2" />
-                Preparing ({preparingOrders.length})
+                Preparing ({(preparingOrders || []).length})
               </h3>
             </div>
             <div className="space-y-4">
@@ -145,7 +145,7 @@ const KitchenDashboard = () => {
             <div className="bg-orange-100 rounded-t-lg p-3 mb-4">
               <h3 className="font-bold text-orange-800 flex items-center">
                 <ChefHat size={20} className="mr-2" />
-                Cooking ({cookingOrders.length})
+                Cooking ({(cookingOrders || []).length})
               </h3>
             </div>
             <div className="space-y-4">
@@ -191,7 +191,7 @@ const OrderCard = ({ order, onUpdateStatus, getNextStatus, getStatusColor }) => 
       <div className="mb-3">
         <h5 className="text-sm font-semibold text-gray-700 mb-1">Items:</h5>
         <ul className="space-y-1">
-          {order.items.map((item) => (
+          {(order?.items || []).map((item) => (
             <li key={item.id} className="text-sm text-gray-700 bg-gray-50 p-1 px-2 rounded">
               {item.item_name} <span className="font-semibold">x{item.quantity}</span>
             </li>

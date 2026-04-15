@@ -91,8 +91,19 @@ export class OrderWebSocket {
   }
 
   connect() {
-    const wsBase = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
-    const wsURL = `${wsBase}/ws/${this.token}`;
+    let wsBase = import.meta.env.VITE_WS_URL;
+    
+    // Auto-detect URL for production/relative paths
+    if (!wsBase || wsBase === '/' || wsBase.startsWith('/')) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      // If wsBase is a path other than just '/', append it
+      const path = (wsBase && wsBase !== '/') ? wsBase : '';
+      wsBase = `${protocol}//${host}${path}`;
+    }
+
+    // Ensure no double slashes before /ws/
+    const wsURL = `${wsBase.replace(/\/$/, '')}/ws/${this.token}`;
 
     this.ws = new WebSocket(wsURL);
 

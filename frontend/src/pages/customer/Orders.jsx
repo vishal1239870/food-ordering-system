@@ -66,7 +66,7 @@ const Orders = () => {
 
   return (
     <Layout title="My Orders">
-      {orders.length === 0 ? (
+      {(orders || []).length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center shadow-md">
           <Package className="mx-auto text-gray-400 mb-4" size={64} />
           <h3 className="text-2xl font-bold text-gray-800 mb-2">No orders yet</h3>
@@ -75,10 +75,10 @@ const Orders = () => {
       ) : (
         <div>
           <h2 className="text-3xl font-bold text-gray-800 mb-6">
-            My Orders ({orders.length})
+            My Orders ({(orders || []).length})
           </h2>
           <div className="space-y-4">
-            {orders.map((order) => (
+            {(orders || []).map((order) => (
               <div
                 key={order.id}
                 className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
@@ -106,7 +106,7 @@ const Orders = () => {
                   <div className="mb-4">
                     <h4 className="font-semibold text-gray-700 mb-2">Items:</h4>
                     <div className="space-y-2">
-                      {order.items.map((item) => (
+                      {(order.items || []).map((item) => (
                         <div
                           key={item.id}
                           className="flex justify-between text-gray-700 bg-gray-50 p-2 rounded"
