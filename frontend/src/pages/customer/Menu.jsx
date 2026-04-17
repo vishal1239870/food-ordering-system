@@ -49,7 +49,13 @@ const Menu = () => {
   const filteredItems =
     selectedCategory === 'all'
       ? menuItems
-      : menuItems.filter((item) => item.category === selectedCategory);
+      : (menuItems || []).filter((item) => {
+          if (!item.category) return false;
+          const itemCat = item.category.toLowerCase().trim();
+          const selectedCat = selectedCategory.toLowerCase().trim();
+          // Check for exact match or if one string contains the other (to handle Burger vs Burgers)
+          return itemCat === selectedCat || itemCat.includes(selectedCat) || selectedCat.includes(itemCat);
+        });
 
   if (loading) {
     return (

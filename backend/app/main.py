@@ -156,13 +156,22 @@ async def startup_event():
             if not existing_items:
                 print("Seeding default menu items...")
                 default_items = [
+                    # Burgers
                     {
                         "name": "Classic Cheeseburger",
-                        "description": "Juicy beef patty with cheddar cheese, lettuce, tomato, and our special sauce.",
+                        "description": "Juicy beef patty with cheddar cheese, lettuce, tomato, and special sauce.",
                         "price": 9.99,
                         "category": "Burgers",
                         "image_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=500&auto=format&fit=crop"
                     },
+                    {
+                        "name": "Bacon BBQ Burger",
+                        "description": "Double patty, crispy bacon, onion rings, and smoky BBQ sauce.",
+                        "price": 12.99,
+                        "category": "Burgers",
+                        "image_url": "https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?q=80&w=500&auto=format&fit=crop"
+                    },
+                    # Pizza
                     {
                         "name": "Margherita Pizza",
                         "description": "Traditional wood-fired pizza with fresh mozzarella, tomatoes, and basil.",
@@ -171,11 +180,19 @@ async def startup_event():
                         "image_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=500&auto=format&fit=crop"
                     },
                     {
-                        "name": "Caesar Salad",
-                        "description": "Crisp romaine lettuce, croutons, parmesan cheese, and Caesar dressing.",
-                        "price": 8.99,
-                        "category": "Salads",
-                        "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=500&auto=format&fit=crop"
+                        "name": "Pepperoni Feast",
+                        "description": "Loaded with spicy pepperoni and double mozzarella cheese.",
+                        "price": 16.50,
+                        "category": "Pizza",
+                        "image_url": "https://images.unsplash.com/photo-1628840042765-356cda07504e?q=80&w=500&auto=format&fit=crop"
+                    },
+                    # Pasta
+                    {
+                        "name": "Penne Arrabbiata",
+                        "description": "Spicy tomato sauce with garlic and fresh peppers.",
+                        "price": 13.99,
+                        "category": "Pasta",
+                        "image_url": "https://images.unsplash.com/photo-1546549032-9571cd6b27df?q=80&w=500&auto=format&fit=crop"
                     },
                     {
                         "name": "Creamy Pesto Pasta",
@@ -184,12 +201,50 @@ async def startup_event():
                         "category": "Pasta",
                         "image_url": "https://images.unsplash.com/photo-1473093226795-af9932fe5856?q=80&w=500&auto=format&fit=crop"
                     },
+                    # Salads
+                    {
+                        "name": "Caesar Salad",
+                        "description": "Crisp romaine lettuce, croutons, parmesan cheese, and Caesar dressing.",
+                        "price": 8.99,
+                        "category": "Salads",
+                        "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Greek Salad",
+                        "description": "Feta cheese, olives, cucumbers, and tomatoes with olive oil.",
+                        "price": 9.50,
+                        "category": "Salads",
+                        "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=500&auto=format&fit=crop"
+                    },
+                    # Desserts
                     {
                         "name": "Chocolate Lava Cake",
                         "description": "Warm chocolate cake with a gooey center, served with vanilla bean ice cream.",
                         "price": 7.50,
                         "category": "Desserts",
                         "image_url": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "New York Cheesecake",
+                        "description": "Classic creamy cheesecake with a graham cracker crust and berry compote.",
+                        "price": 8.50,
+                        "category": "Desserts",
+                        "image_url": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?q=80&w=500&auto=format&fit=crop"
+                    },
+                    # Drinks
+                    {
+                        "name": "Iced Berry Lemonade",
+                        "description": "Refreshing lemonade with a splash of blueberry and raspberry syrup.",
+                        "price": 4.50,
+                        "category": "Drinks",
+                        "image_url": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?q=80&w=500&auto=format&fit=crop"
+                    },
+                    {
+                        "name": "Fresh Orange Juice",
+                        "description": "100% freshly squeezed oranges.",
+                        "price": 4.99,
+                        "category": "Drinks",
+                        "image_url": "https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?q=80&w=500&auto=format&fit=crop"
                     }
                 ]
                 for item in default_items:
